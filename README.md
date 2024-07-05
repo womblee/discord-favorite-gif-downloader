@@ -15,6 +15,8 @@ This script allows you to download all of your favorite gifs very fast
     "settings": "ENCODED TEXT HERE"
 }
 ```
+![image](https://github.com/womblee/discord-favorite-gif-downloader/assets/52250786/8fa93c13-b7d7-481c-888a-8e5fee0e5f58)
+
 7. Now I want you to copy the "ENCODED TEXT HERE" portion ONLY and save it to a text file!
 8. The file should be named _'encoded_file.txt'_ and must be next to main.py in order for the script to work.
 
