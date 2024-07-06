@@ -4,9 +4,9 @@ This script allows you to download all of your favorite gifs very fast
 ![image](https://github.com/womblee/discord-favorite-gif-downloader/assets/52250786/a116dbf0-1171-4cf4-ac6b-4428cf6824ff)
 
 ## Additional platforms supported
-![tenor-logo-4EA1E41CC2-seeklogo com](https://github.com/womblee/discord-favorite-gif-downloader/assets/52250786/321d4bcc-6919-4e83-aeee-067baaae1f5c)
+- ![tenor-logo-4EA1E41CC2-seeklogo com](https://github.com/womblee/discord-favorite-gif-downloader/assets/52250786/321d4bcc-6919-4e83-aeee-067baaae1f5c)
 
-![5842a969a6515b1e0ad75b05-1022447648 (3)](https://github.com/womblee/discord-favorite-gif-downloader/assets/52250786/9be7ea57-a249-475d-8803-29a0d3227940)
+- ![5842a969a6515b1e0ad75b05-1022447648 (3)](https://github.com/womblee/discord-favorite-gif-downloader/assets/52250786/9be7ea57-a249-475d-8803-29a0d3227940)
 
 # How to setup
 1. Open the developer tab of your browser via **F12**.
