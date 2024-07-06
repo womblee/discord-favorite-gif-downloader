@@ -64,6 +64,34 @@ def extract_and_fix_urls(text):
     
     return fixed_urls
 
+def get_imgur_url(imgur_url):
+    try:
+        # Handle album URLs
+        if '/a/' in imgur_url:
+            response = requests.get(imgur_url, timeout=10)
+            response.raise_for_status()
+            # Extract all image URLs from the album page
+            image_urls = re.findall(r'https://i\.imgur\.com/\w+\.(?:jpg|png|gif|mp4)', response.text)
+            return image_urls if image_urls else None
+
+        # Handle single image/video URLs
+        response = requests.get(imgur_url, timeout=10)
+        response.raise_for_status()
+        content = response.text
+
+        # Try to find direct image/video URL in the page source
+        match = re.search(r'https://i\.imgur\.com/\w+\.(?:jpg|png|gif|mp4)', content)
+        if match:
+            return match.group(0)
+
+        # If direct URL not found, construct it from the imgur ID
+        imgur_id = imgur_url.split('/')[-1]
+        return f'https://i.imgur.com/{imgur_id}.jpg'
+
+    except requests.exceptions.RequestException:
+        pass  # Silently handle the error
+    return None
+
 def get_tenor_gif_url(tenor_url):
     try:
         response = requests.get(tenor_url, timeout=10)
@@ -115,8 +143,19 @@ def safe_filename(filename, max_length=200):
 def download_media(url):
     global successful_downloads, failed_downloads
     try:
-        if url.lower().endswith(SUPPORTED_EXTENSIONS):
-            direct_url = url
+        if 'imgur.com' in url:
+            imgur_urls = get_imgur_url(url)
+            if imgur_urls:
+                if isinstance(imgur_urls, list):  # It's an album
+                    for imgur_url in imgur_urls:
+                        download_media(imgur_url)  # Recursive call for each image in the album
+                    return
+                else:  # Single image/video
+                    direct_url = imgur_urls
+            else:
+                failed_downloads += 1
+                error_summary["Imgur URL skipped"].append(url)
+                return
         elif 'tenor.com' in url:
             gif_url = get_tenor_gif_url(url)
             if gif_url:
@@ -125,6 +164,8 @@ def download_media(url):
                 failed_downloads += 1
                 error_summary["Tenor URL skipped"].append(url)
                 return
+        elif url.lower().endswith(SUPPORTED_EXTENSIONS):
+            direct_url = url
         else:
             direct_url = url
 
