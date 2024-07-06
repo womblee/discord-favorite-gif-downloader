@@ -10,10 +10,10 @@ This script allows you to download all of your favorite gifs very fast
 
 # How to setup
 1. Open the developer tab of your browser via **F12**.
-2. Open the 'Network' tab.
+2. Open the **'Network'** tab.
 3. Refresh the discord page via **CTRL+R**.
 4. Open the gif selector and go into the favorite gifs tab.
-5. Now go to the "{;} 2" key and select it. _(if you don't see it repeat the process)_
+5. Now go to the **"{;} 2"** key and select it. _(if you don't see it repeat the process)_
 6. Copy the contents of it. _(example provided below)_
 ```json
 {
