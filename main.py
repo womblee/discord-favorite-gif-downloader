@@ -66,12 +66,15 @@ def extract_and_fix_urls(text):
 
 def get_imgur_url(imgur_url):
     try:
+        # Format for Imgur images
+        fmt_url = r'https://i\.imgur\.com/\w+\.(?:jpg|png|gif|mp4)'
+        
         # Handle album URLs
         if '/a/' in imgur_url:
             response = requests.get(imgur_url, timeout=10)
             response.raise_for_status()
             # Extract all image URLs from the album page
-            image_urls = re.findall(r'https://i\.imgur\.com/\w+\.(?:jpg|png|gif|mp4)', response.text)
+            image_urls = re.findall(fmt_url, response.text)
             return image_urls if image_urls else None
 
         # Handle single image/video URLs
@@ -80,7 +83,7 @@ def get_imgur_url(imgur_url):
         content = response.text
 
         # Try to find direct image/video URL in the page source
-        match = re.search(r'https://i\.imgur\.com/\w+\.(?:jpg|png|gif|mp4)', content)
+        match = re.search(fmt_url, content)
         if match:
             return match.group(0)
 
