@@ -98,19 +98,29 @@ def get_imgur_url(imgur_url):
 def get_tenor_gif_url(tenor_url):
     try:
         response = requests.get(tenor_url, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
         
-        gif_element = soup.select_one('div.Gif img')
-        if gif_element and 'src' in gif_element.attrs:
-            return gif_element['src']
-        
-        meta_content_url = soup.select_one('meta[itemprop="contentUrl"]')
-        if meta_content_url and 'content' in meta_content_url.attrs:
-            return meta_content_url['content']
-        
+        if response.status_code == 200:
+            try:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Try to find the GIF URL in various locations
+                gif_element = soup.select_one('div.Gif img')
+                if gif_element and 'src' in gif_element.attrs:
+                    return gif_element['src']
+                
+                meta_content_url = soup.select_one('meta[itemprop="contentUrl"]')
+                if meta_content_url and 'content' in meta_content_url.attrs:
+                    return meta_content_url['content']
+                
+            except Exception:
+                pass  # Silently handle parsing errors
+        else:
+            # Simple status code check with no additional logging
+            pass
+            
     except requests.exceptions.RequestException:
-        pass  # Silently handle the error
+        pass  # Silently handle request errors
+    
     return None
 
 CONTENT_TYPES = {
@@ -260,7 +270,10 @@ def main():
     total_urls = len(urls)
 
     for url in urls:
-        download_media(url)
+        try:
+            download_media(url)
+        except Exception as e:
+            logger.error(e)
 
     # Print statistics
     logger.info("\n--- Download Statistics ---")
