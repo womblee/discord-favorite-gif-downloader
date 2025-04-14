@@ -36,6 +36,16 @@ total_urls = 0
 successful_downloads = 0
 failed_downloads = 0
 error_summary = defaultdict(list)
+detailed_errors = {
+    "429": [],
+    "404": [],
+    "content-type": [],
+    "other": []
+}
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_DELAY = 15  # seconds
 
 def ensure_directory(directory):
     if not os.path.exists(directory):
@@ -91,8 +101,9 @@ def get_imgur_url(imgur_url):
         imgur_id = imgur_url.split('/')[-1]
         return f'https://i.imgur.com/{imgur_id}.jpg'
 
-    except requests.exceptions.RequestException:
-        pass  # Silently handle the error
+    except requests.exceptions.RequestException as e:
+        # Record the error but allow caller to handle it
+        return None, e
     return None
 
 def get_tenor_gif_url(tenor_url):
@@ -112,14 +123,13 @@ def get_tenor_gif_url(tenor_url):
                 if meta_content_url and 'content' in meta_content_url.attrs:
                     return meta_content_url['content']
                 
-            except Exception:
-                pass  # Silently handle parsing errors
+            except Exception as e:
+                return None, e  # Return the exception for better error handling
         else:
-            # Simple status code check with no additional logging
-            pass
+            return None, f"HTTP {response.status_code}"
             
-    except requests.exceptions.RequestException:
-        pass  # Silently handle request errors
+    except requests.exceptions.RequestException as e:
+        return None, e  # Return the exception for better error handling
     
     return None
 
@@ -153,11 +163,24 @@ def safe_filename(filename, max_length=200):
     
     return name + ext
 
-def download_media(url):
+def should_retry(status_code, error_type):
+    """Determine if we should retry based on the error"""
+    if status_code == 429:  # Too Many Requests
+        return True
+    if error_type == "other":  # Network timeouts, connection issues, etc.
+        return True
+    return False
+
+def download_media(url, retry_count=0):
     global successful_downloads, failed_downloads
     try:
         if 'imgur.com' in url:
-            imgur_urls = get_imgur_url(url)
+            result = get_imgur_url(url)
+            if isinstance(result, tuple):  # Error occurred
+                imgur_urls, error = result
+                raise error
+            imgur_urls = result
+            
             if imgur_urls:
                 if isinstance(imgur_urls, list):  # It's an album
                     for imgur_url in imgur_urls:
@@ -168,14 +191,27 @@ def download_media(url):
             else:
                 failed_downloads += 1
                 error_summary["Imgur URL skipped"].append(url)
+                detailed_errors["other"].append({
+                    "link": url,
+                    "reason": "Failed to extract Imgur URL"
+                })
                 return
         elif 'tenor.com' in url:
-            gif_url = get_tenor_gif_url(url)
+            result = get_tenor_gif_url(url)
+            if isinstance(result, tuple):  # Error occurred
+                gif_url, error = result
+                raise error
+            gif_url = result
+            
             if gif_url:
                 direct_url = gif_url
             else:
                 failed_downloads += 1
                 error_summary["Tenor URL skipped"].append(url)
+                detailed_errors["other"].append({
+                    "link": url,
+                    "reason": "Failed to extract Tenor URL"
+                })
                 return
         elif url.lower().endswith(SUPPORTED_EXTENSIONS):
             direct_url = url
@@ -189,9 +225,13 @@ def download_media(url):
         
         extension, subfolder = get_extension_and_subfolder(content_type, direct_url)
         if not extension:
-           failed_downloads += 1
-           error_summary["Unsupported content type"].append(f"{content_type} - {direct_url}")
-           return
+            failed_downloads += 1
+            error_summary["Unsupported content type"].append(f"{content_type} - {direct_url}")
+            detailed_errors["content-type"].append({
+                "link": direct_url,
+                "content-type": content_type
+            })
+            return
 
         parsed_url = urlparse(unquote(direct_url))
         filename = os.path.basename(parsed_url.path)
@@ -220,11 +260,47 @@ def download_media(url):
         progress = (successful_downloads + failed_downloads) / total_urls * 100
         logger.info(f"Downloaded: {filename} ({progress:.1f}% complete)")
     except requests.exceptions.RequestException as e:
-        failed_downloads += 1
+        error_type = "other"
+        status_code = None
+        
         if isinstance(e, requests.exceptions.HTTPError):
-            error_summary[f"HTTP {e.response.status_code}"].append(url)
+            status_code = e.response.status_code
+            if status_code == 404:
+                error_type = "404"
+                error_summary[f"HTTP {status_code}"].append(url)
+                detailed_errors["404"].append({"link": url})
+            elif status_code == 429:
+                error_type = "429"
+                error_summary[f"HTTP {status_code}"].append(url)
+                detailed_errors["429"].append({"link": url})
+            else:
+                error_summary[f"HTTP {status_code}"].append(url)
+                detailed_errors["other"].append({
+                    "link": url,
+                    "reason": f"HTTP {status_code}"
+                })
         else:
             error_summary["Other errors"].append(f"{url} - {str(e)}")
+            detailed_errors["other"].append({
+                "link": url,
+                "reason": str(e)
+            })
+        
+        # Implement retry logic for certain errors
+        if retry_count < MAX_RETRIES and should_retry(status_code, error_type):
+            retry_count += 1
+            logger.info(f"Retry attempt {retry_count}/{MAX_RETRIES} for {url} after {RETRY_DELAY} seconds...")
+            time.sleep(RETRY_DELAY)
+            return download_media(url, retry_count)
+        
+        failed_downloads += 1
+    except Exception as e:
+        failed_downloads += 1
+        error_summary["Unexpected errors"].append(f"{url} - {str(e)}")
+        detailed_errors["other"].append({
+            "link": url,
+            "reason": str(e)
+        })
 
 
 def read_input_file(file_path):
@@ -257,6 +333,20 @@ def get_input_file():
     logger.error("No valid input file found. Please ensure 'data.txt' or 'data.json' exists.\nNote: If your filename is 'data.txt', only raw data from 'settings' key must be inside of it.")
     return None
 
+def write_error_log():
+    """Write detailed error information to a JSON file"""
+    ensure_directory('logs')
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    error_log_path = os.path.join('logs', f'error_log_{timestamp}.json')
+    
+    # Remove empty categories
+    cleaned_errors = {k: v for k, v in detailed_errors.items() if v}
+    
+    with open(error_log_path, 'w', encoding='utf-8') as f:
+        json.dump(cleaned_errors, f, indent=4)
+    
+    logger.info(f"Detailed error log written to {error_log_path}")
+
 def main():
     global total_urls
     
@@ -273,7 +363,15 @@ def main():
         try:
             download_media(url)
         except Exception as e:
-            logger.error(e)
+            logger.error(f"Unhandled exception: {e}")
+            detailed_errors["other"].append({
+                "link": url,
+                "reason": f"Unhandled: {str(e)}"
+            })
+
+    # Write detailed error log to file
+    if any(detailed_errors.values()):
+        write_error_log()
 
     # Print statistics
     logger.info("\n--- Download Statistics ---")
@@ -286,7 +384,7 @@ def main():
     if error_summary:
         logger.info("\n--- Error Summary ---")
         for error_type, urls in error_summary.items():
-            logger.info(f"{error_type}: {len(urls)} occurences")
+            logger.info(f"{error_type}: {len(urls)} occurrences")
             if error_type == "HTTP 404":
                 logger.info("Sample URLs (max 5):")
                 for url in urls[:5]:
@@ -298,6 +396,7 @@ def main():
                 logger.info(f"  (Showing first 5 of {len(urls)} errors)")
                 for url in urls[:5]:
                     logger.info(f"  - {url}")
+                logger.info(f"  See error log file for complete list")
 
     # Pause for 10 seconds
     logger.info("\nScript finished. Exiting in 10 seconds...")
