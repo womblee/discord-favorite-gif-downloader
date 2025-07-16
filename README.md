@@ -21,7 +21,7 @@ _To install needed libraries for this script_:
 
 ## Usage
 
-1. **cd** into the directory with the script (e.g `cd C:\Users\CuteCat\\Desktop\GifDownloader`)
+1. **cd** into the directory with the script (e.g `cd C:\Users\CuteCat\Desktop\GifDownloader`)
 2. Copy your favorite .gif(s) data and save it to `data.json` (see article below)
 3. Run this command: `python main.py`
 4. Your .gif(s) should start downloading
