@@ -1,7 +1,7 @@
 # Discord Favorite (.gif) Downloader
 This script allows you to download all of your favorite gifs from discord very fast without any bullshit.
 
-Still works as of **27.05.2025**
+Updated and still works as of **16.07.2025**
 
 ![image](https://github.com/womblee/discord-favorite-gif-downloader/assets/52250786/a116dbf0-1171-4cf4-ac6b-4428cf6824ff)
 
